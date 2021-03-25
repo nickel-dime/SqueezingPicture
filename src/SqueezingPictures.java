@@ -1,8 +1,10 @@
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import tester.*;
 import javalib.impworld.*;
 import javalib.worldimages.*;
 import java.awt.Color;
+import java.util.Deque;
 
 // squeezes pictures, removing blank/unimportant space
 public class SqueezingPictures {
@@ -15,19 +17,21 @@ public class SqueezingPictures {
   public SqueezingPictures(String filename) {
     this.filename = filename;
     this.image = new FromFileImage(filename);
+    this.grid = new ArrayDeque<Deque<Pixel>>();
     // fill in the 2d deque grid
     // there is no more efficient way to fill in every pixel of the grid than to
     // go through each pixel individually
     // i is going down (columns) and j is going right (rows)
     for (int i = 0; i < image.getHeight(); i += 1) {
-      Deque<Pixel> curRow = new Deque<Pixel>();
-      Deque<Pixel> prevRow = grid.removeFromTail();
-      Deque<Pixel> prevRowCopy = prevRow.duplicate();
+      Deque<Pixel> curRow = new ArrayDeque<Pixel>();
+      ArrayList<Pixel> prevRow = new ArrayList<Pixel>();
+
+      if (!grid.isEmpty()) {
+        prevRow = new ArrayList<Pixel>(grid.peekLast());
+      }
 
       for (int j = 0; j < image.getWidth(); j += 1) {
         Pixel curPixel;
-        Pixel leftPixel = curRow.removeFromTail();
-        Pixel upPixel = prevRow.removeFromHead();
         if (i == 0 && j == 0) {
           // top left corner
           curPixel = new Pixel(this.image.getColorAt(j, i), new EdgePixel(), null, null, new EdgePixel());
@@ -38,44 +42,36 @@ public class SqueezingPictures {
 
         } else if (i == image.getHeight() && j == 0) {
           // bottom left corner
-          // NEED HELP - ADD UP VALUE
-          curPixel = new Pixel(this.image.getColorAt(j, i), upPixel, new EdgePixel(), null, new EdgePixel());
+          curPixel = new Pixel(this.image.getColorAt(j, i), prevRow.get(j), new EdgePixel(), null, new EdgePixel());
 
         } else if (i == image.getHeight() && j == image.getWidth()) {
           // bottom right corner
-          // NEED HELP - ADD UP VALUE
-          curPixel = new Pixel(this.image.getColorAt(j, i), upPixel, new EdgePixel(), new EdgePixel(), leftPixel);
+          curPixel = new Pixel(this.image.getColorAt(j, i), prevRow.get(j), new EdgePixel(), new EdgePixel(), curRow.peekLast());
 
         } else if (i == 0) {
           // top row
-          curPixel = new Pixel(this.image.getColorAt(j, i), new EdgePixel(), null, null, leftPixel);
+          curPixel = new Pixel(this.image.getColorAt(j, i), new EdgePixel(), null, null, curRow.peekLast());
 
         } else if (i == image.getHeight()) {
           // bottom row
-          // NEED HELP - ADD UP VALUE
-          curPixel = new Pixel(this.image.getColorAt(j, i), upPixel, null, new EdgePixel(), leftPixel);
+          curPixel = new Pixel(this.image.getColorAt(j, i), prevRow.get(j), null, new EdgePixel(), curRow.peekLast());
 
         } else if (j == 0) {
           // left column
-          // NEED HELP - ADD UP VALUE
-          curPixel = new Pixel(this.image.getColorAt(j, i), upPixel, null, null, new EdgePixel());
+          curPixel = new Pixel(this.image.getColorAt(j, i), prevRow.get(j), null, null, new EdgePixel());
 
         } else if (j == image.getWidth()) {
           // right column
-          // NEED HELP - ADD UP VALUE
-          curPixel = new Pixel(this.image.getColorAt(j, i), upPixel, new EdgePixel(), null, leftPixel);
+          curPixel = new Pixel(this.image.getColorAt(j, i), prevRow.get(j), new EdgePixel(), null, curRow.peekLast());
 
         } else {
           // no edges
-          // NEED HELP - ADD UP VALUE
-          curPixel = new Pixel(this.image.getColorAt(j, i), upPixel, null, null, leftPixel);
+          curPixel = new Pixel(this.image.getColorAt(j, i), prevRow.get(j), null, null, curRow.peekLast());
 
         }
-        curRow.addAtTail(leftPixel);
-        curRow.addAtTail(curPixel);
+        curRow.addLast(curPixel);
       }
-      grid.addAtTail(prevRowCopy);
-      grid.addAtTail(curRow);
+      grid.addLast(curRow);
     }
   }
 }
@@ -125,16 +121,20 @@ class Pixel implements IPixel {
   // creates a pixel with pixels in other directions
 
   public Pixel(Color color, IPixel up, IPixel right, IPixel down, IPixel left) {
+    this.up = up;
+    this.right = right;
+    this.down = down;
+    this.left = left;
 
     // two pixels are only the same if they are the same object reference
     // .equals here is used for referential equality, which is what we want to check
     // since ** TO DO **
-    if (!(this.getLeft().getUp().equals(this.getUp().getLeft())
-            && this.getUp().getRight().equals(this.getRight().getUp())
-            && this.getRight().getDown().equals(this.getDown().getRight())
-            && this.getDown().getLeft().equals(this.getLeft().getDown()))) {
-      throw new IllegalArgumentException("This pixel is not well formed");
-    }
+//    if (!(this.getLeft().getUp().equals(this.getUp().getLeft())
+//            && this.getUp().getRight().equals(this.getRight().getUp())
+//            && this.getRight().getDown().equals(this.getDown().getRight())
+//            && this.getDown().getLeft().equals(this.getLeft().getDown()))) {
+//      throw new IllegalArgumentException("This pixel is not well formed");
+//    }
 
     this.getUp().setDown(this);
     this.getRight().setLeft(this);
@@ -170,6 +170,7 @@ class Pixel implements IPixel {
 
   // gets the ipixel to the right
   public IPixel getRight() {
+    // if null return edge? otherwise return this?
     return this.right;
   }
 
@@ -251,6 +252,7 @@ class ExamplesSqueezingPictures {
   void initTestConditions() {
     this.sp = new SqueezingPictures("balloons.jpg");
     System.out.println(sp.image.getWidth() + " " + sp.image.getHeight());
+
   }
 
   void testStuff(Tester t) {
