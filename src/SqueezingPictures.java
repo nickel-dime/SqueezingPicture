@@ -1,3 +1,4 @@
+// TODO test one pixel grid
 import javalib.worldimages.FromFileImage;
 import tester.Tester;
 
@@ -5,6 +6,7 @@ import java.awt.*;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
+import java.util.Iterator;
 
 // represents a pixel
 interface IPixel {
@@ -49,13 +51,10 @@ interface IPixel {
 // squeezes pictures, removing blank/unimportant space
 public class SqueezingPictures {
 
-  String filename;
-  FromFileImage image;
   Deque<Deque<IPixel>> grid;
 
   public SqueezingPictures(String filename) {
-    this.filename = filename;
-    this.image = new FromFileImage(filename);
+    FromFileImage image = new FromFileImage(filename);
     this.grid = new ArrayDeque<Deque<IPixel>>();
     // fill in the 2d deque grid
     // there is no more efficient way to fill in every pixel of the grid than to
@@ -63,7 +62,7 @@ public class SqueezingPictures {
     // i is going down (columns) and j is going right (rows)
     for (int i = 0; i < image.getHeight(); i += 1) {
       Deque<IPixel> curRow = new ArrayDeque<IPixel>();
-      ArrayList<IPixel> prevRow = new ArrayList<IPixel>();
+      Iterator<IPixel> prevRow = new ArrayDeque<IPixel>().iterator();
 
       // if there already is a row, we can set the previous row to that value
       if (!grid.isEmpty()) {
@@ -71,55 +70,59 @@ public class SqueezingPictures {
         // we could have removed values and used them in the deque, but that's not how
         // a deque is supposed to be used. Since we want to get values at a certain index
         // converting the deque to an arraylist makes more sense
-        prevRow = new ArrayList<IPixel>(grid.peekLast());
+        prevRow = grid.peekLast().iterator();
       }
 
       // for each pixel in the row, insert it into the deque
       for (int j = 0; j < image.getWidth(); j += 1) {
         IPixel curPixel;
+        IPixel upperPixel = new UnknownPixel();
+        if (prevRow.hasNext()) {
+          upperPixel = prevRow.next();
+        }
         if (i == 0 && j == 0) {
           // top left corner
-          curPixel = new Pixel(this.image.getColorAt(j, i), new UnknownPixel(),
+          curPixel = new Pixel(image.getColorAt(j, i), new UnknownPixel(),
                   new UnknownPixel(), new UnknownPixel(), new UnknownPixel());
 
         } else if (i == 0 && j == image.getWidth()) {
           // top right corner
-          curPixel = new Pixel(this.image.getColorAt(j, i), new UnknownPixel(),
+          curPixel = new Pixel(image.getColorAt(j, i), new UnknownPixel(),
                   new UnknownPixel(), new UnknownPixel(), curRow.peekLast());
 
         } else if (i == image.getHeight() && j == 0) {
           // bottom left corner
-          curPixel = new Pixel(this.image.getColorAt(j, i), prevRow.get(j), new UnknownPixel(),
+          curPixel = new Pixel(image.getColorAt(j, i), upperPixel, new UnknownPixel(),
                   new UnknownPixel(), new UnknownPixel());
 
         } else if (i == image.getHeight() && j == image.getWidth()) {
           // bottom right corner
-          curPixel = new Pixel(this.image.getColorAt(j, i), prevRow.get(j), new UnknownPixel(),
+          curPixel = new Pixel(image.getColorAt(j, i), upperPixel, new UnknownPixel(),
                   new UnknownPixel(), curRow.peekLast());
 
         } else if (i == 0) {
           // top row
-          curPixel = new Pixel(this.image.getColorAt(j, i), new UnknownPixel(),
+          curPixel = new Pixel(image.getColorAt(j, i), new UnknownPixel(),
                   new UnknownPixel(), new UnknownPixel(), curRow.peekLast());
 
         } else if (i == image.getHeight()) {
           // bottom row
-          curPixel = new Pixel(this.image.getColorAt(j, i), prevRow.get(j), new UnknownPixel(),
+          curPixel = new Pixel(image.getColorAt(j, i), upperPixel, new UnknownPixel(),
                   new UnknownPixel(), curRow.peekLast());
 
         } else if (j == 0) {
           // left column
-          curPixel = new Pixel(this.image.getColorAt(j, i), prevRow.get(j), new UnknownPixel(),
+          curPixel = new Pixel(image.getColorAt(j, i), upperPixel, new UnknownPixel(),
                   new UnknownPixel(), new UnknownPixel());
 
         } else if (j == image.getWidth()) {
           // right column
-          curPixel = new Pixel(this.image.getColorAt(j, i), prevRow.get(j), new UnknownPixel(),
+          curPixel = new Pixel(image.getColorAt(j, i), upperPixel, new UnknownPixel(),
                   new UnknownPixel(), curRow.peekLast());
 
         } else {
           // no edges
-          curPixel = new Pixel(this.image.getColorAt(j, i), prevRow.get(j), new UnknownPixel(),
+          curPixel = new Pixel(image.getColorAt(j, i), upperPixel, new UnknownPixel(),
                   new UnknownPixel(), curRow.peekLast());
 
         }
@@ -129,22 +132,88 @@ public class SqueezingPictures {
     }
   }
 
+  // constructor for testing
+  public SqueezingPictures(Deque<Deque<IPixel>> grid) {
+    this.grid = grid;
+  }
 
+  // creates a "grid" of seaminfos for each pixel
+  SeamInfo minEnergy() {
+    Deque<Deque<SeamInfo>> seamGrid = new ArrayDeque<Deque<SeamInfo>>();
+    Iterator<Deque<IPixel>> gridIterator = grid.iterator();
+
+    seamGrid.add(this.firstRow(gridIterator.next()));
+    // for each row in the grid iterator
+    while (gridIterator.hasNext()) {
+      // gives us the current row of pixesl
+      Iterator<IPixel> curRow = gridIterator.next().iterator();
+      // gives us the last row of the seam info grid
+      ArrayList<SeamInfo> lastSeamInfoRow = new ArrayList<SeamInfo>(seamGrid.peekLast());
+
+      // the current row of seam infos
+      Deque<SeamInfo> seamGridRow = new ArrayDeque<SeamInfo>();
+
+      int pixelIdx = 0;
+      // for each pixel in the row, check it's upper three neighbors and update the seam so far
+      // with the highest energy seaminfo
+      while (curRow.hasNext()) {
+        IPixel curPixel = curRow.next();
+        SeamInfo minSeamInfo = lastSeamInfoRow.get(pixelIdx);
+        // check a pixel's upper three neighbors and get the smallest energy seam info
+        for (int i = -1; i <= 1; i += 1) {
+          if (i + pixelIdx >= 0 && i + pixelIdx < lastSeamInfoRow.size()
+                  && lastSeamInfoRow.get(i + pixelIdx).totalWeight < minSeamInfo.totalWeight) {
+            minSeamInfo = lastSeamInfoRow.get(i + pixelIdx);
+          }
+        }
+        SeamInfo newSeam = new SeamInfo(curPixel, curPixel.getEnergy() + minSeamInfo.totalWeight,
+                minSeamInfo);
+        seamGridRow.add(newSeam);
+
+      }
+      seamGrid.add(seamGridRow);
+    }
+
+    Iterator<SeamInfo> lastRowSeams = seamGrid.peekLast().iterator();
+    SeamInfo minSeamInfo = new SeamInfo(new UnknownPixel(), Integer.MAX_VALUE, null);
+
+    // finds the minimum seam info energy in the last row
+    while(lastRowSeams.hasNext()) {
+      SeamInfo curSeam = lastRowSeams.next();
+      if (curSeam.totalWeight < minSeamInfo.totalWeight) {
+        minSeamInfo = curSeam;
+      }
+    }
+    return minSeamInfo;
+  }
+
+  // constructs the first row of a seam grid
+  Deque<SeamInfo> firstRow(Deque<IPixel> row) {
+    Iterator<IPixel> rowIterator = row.iterator();
+    Deque<SeamInfo> rowOfSeamInfo = new ArrayDeque<>();
+
+    // update each pixel's seaminfo in the first row
+    while (rowIterator.hasNext()) {
+      IPixel curPixel = rowIterator.next();
+      SeamInfo currSeamInfo = new SeamInfo(curPixel, curPixel.getEnergy(), null);
+      rowOfSeamInfo.add(currSeamInfo);
+    }
+    return rowOfSeamInfo;
+  }
 }
 
 // constructs a seam info
 class SeamInfo {
 
-  Pixel currentPixel;
+  IPixel currentPixel;
   double totalWeight;
   SeamInfo cameFrom;
 
-  public SeamInfo(Pixel currentPixel, double totalWeight, SeamInfo cameFrom) {
+  public SeamInfo(IPixel currentPixel, double totalWeight, SeamInfo cameFrom) {
     this.currentPixel = currentPixel;
     this.totalWeight = totalWeight;
     this.cameFrom = cameFrom;
   }
-
 }
 
 // constructs an individual pixel with references to neighbors
@@ -312,11 +381,15 @@ class UnknownPixel implements IPixel {
 
 
 class ExamplesSqueezingPictures {
+
   SqueezingPictures eightBy6;
   SqueezingPictures twoByThree;
   SqueezingPictures threeByThree;
   SqueezingPictures solidThree;
   SqueezingPictures balloons;
+  SqueezingPictures handMadeThreeByThree;
+  SqueezingPictures handMadeFourByFour;
+
   UnknownPixel ukPixel;
   IPixel redLine1;
   IPixel redLine2;
@@ -334,10 +407,29 @@ class ExamplesSqueezingPictures {
   IPixel botMid;
   IPixel botRight;
 
+  // for given grid
+  IPixel zeroZero;
+  IPixel zeroOne;
+  IPixel zeroTwo;
+  IPixel zeroThree;
+  IPixel oneZero;
+  IPixel oneOne;
+  IPixel oneTwo;
+  IPixel oneThree;
+  IPixel twoZero;
+  IPixel twoOne;
+  IPixel twoTwo;
+  IPixel twoThree;
+  IPixel threeZero;
+  IPixel threeOne;
+  IPixel threeTwo;
+  IPixel threeThree;
+
   IPixel greenLineNEU;
   IPixel greenLineSymphony;
 
   Deque<Deque<IPixel>> gridSolid;
+  Deque<Deque<IPixel>> givenGrid;
 
   void initTestConditions() {
     this.eightBy6 = new SqueezingPictures("8x6.jpeg");
@@ -401,15 +493,103 @@ class ExamplesSqueezingPictures {
     // bot right
     this.botRight = new Pixel(new Color(12, 240, 58), this.midRight, new UnknownPixel(),
             new UnknownPixel(), this.botMid);
-    botThreeRow.add(botMid);
+    botThreeRow.add(botRight);
 
     this.gridSolid = new ArrayDeque<Deque<IPixel>>();
     this.gridSolid.add(topThreeRow);
     this.gridSolid.add(midThreeRow);
     this.gridSolid.add(botThreeRow);
+
+
+    // creating a solid grid from the given 4x4 number grid in the assignment
+    Deque<IPixel> givenRowOne = new ArrayDeque<IPixel>();
+    Deque<IPixel> givenRowTwo = new ArrayDeque<IPixel>();
+    Deque<IPixel> givenRowThree = new ArrayDeque<IPixel>();
+    Deque<IPixel> givenRowFour = new ArrayDeque<IPixel>();
+
+    // we have no knowledge of other pixels when we create the first
+    // we also assume the constructor works correctly, as tested before
+
+    // top row
+    this.zeroZero = new Pixel(new Color(12, 240, 58), new UnknownPixel(), new UnknownPixel(),
+            new UnknownPixel(), new UnknownPixel());
+    givenRowOne.add(zeroZero);
+
+    this.zeroOne = new Pixel(new Color(12, 240, 58), new UnknownPixel(), new UnknownPixel(),
+            new UnknownPixel(), this.zeroZero);
+    givenRowOne.add(zeroOne);
+
+    this.zeroTwo = new Pixel(new Color(12, 240, 58), new UnknownPixel(), new UnknownPixel(),
+            new UnknownPixel(), this.zeroOne);
+    givenRowOne.add(zeroTwo);
+
+    this.zeroThree = new Pixel(new Color(12, 240, 58), new UnknownPixel(), new UnknownPixel(),
+            new UnknownPixel(), this.zeroThree);
+    givenRowOne.add(zeroThree);
+
+    // second row
+    this.oneZero = new Pixel(new Color(12, 240, 58), this.zeroZero, new UnknownPixel(),
+            new UnknownPixel(), new UnknownPixel());
+    givenRowTwo.add(oneZero);
+
+    this.oneOne = new Pixel(new Color(12, 240, 58), this.zeroOne, new UnknownPixel(),
+            new UnknownPixel(), this.oneZero);
+    givenRowTwo.add(oneOne);
+
+    this.oneTwo = new Pixel(new Color(12, 240, 58), this.zeroTwo, new UnknownPixel(),
+            new UnknownPixel(), this.oneOne);
+    givenRowTwo.add(oneTwo);
+
+    this.oneThree = new Pixel(new Color(12, 240, 58), this.zeroThree, new UnknownPixel(),
+            new UnknownPixel(), this.oneTwo);
+    givenRowTwo.add(oneThree);
+
+    // third row
+    this.twoZero = new Pixel(new Color(12, 240, 58), this.oneZero, new UnknownPixel(),
+            new UnknownPixel(), new UnknownPixel());
+    givenRowThree.add(twoZero);
+
+    this.twoOne = new Pixel(new Color(12, 240, 58), this.oneOne, new UnknownPixel(),
+            new UnknownPixel(), this.twoZero);
+    givenRowThree.add(twoOne);
+
+    this.twoTwo = new Pixel(new Color(12, 240, 58), this.oneTwo, new UnknownPixel(),
+            new UnknownPixel(), this.twoOne);
+    givenRowThree.add(twoTwo);
+
+    this.twoThree = new Pixel(new Color(12, 240, 58), this.oneThree, new UnknownPixel(),
+            new UnknownPixel(), this.twoTwo);
+    givenRowThree.add(twoThree);
+
+    // fourth row
+    this.threeZero = new Pixel(new Color(12, 240, 58), this.twoZero, new UnknownPixel(),
+            new UnknownPixel(), new UnknownPixel());
+    givenRowThree.add(threeZero);
+
+    this.threeOne = new Pixel(new Color(12, 240, 58), this.twoOne, new UnknownPixel(),
+            new UnknownPixel(), this.threeZero);
+    givenRowThree.add(threeOne);
+
+    this.threeTwo = new Pixel(new Color(12, 240, 58), this.twoTwo, new UnknownPixel(),
+            new UnknownPixel(), this.threeOne);
+    givenRowThree.add(threeTwo);
+
+    this.threeThree = new Pixel(new Color(12, 240, 58), this.twoThree, new UnknownPixel(),
+            new UnknownPixel(), this.threeTwo);
+    givenRowThree.add(threeThree);
+
+    this.givenGrid = new ArrayDeque<Deque<IPixel>>();
+    this.givenGrid.add(givenRowOne);
+    this.givenGrid.add(givenRowTwo);
+    this.givenGrid.add(givenRowThree);
+    this.givenGrid.add(givenRowFour);
+
+    this.handMadeThreeByThree = new SqueezingPictures(gridSolid);
+    this.handMadeFourByFour = new SqueezingPictures(givenGrid);
+
   }
 
-  // tests if we are creating well-structured pixels
+  // tests if we are creating well-structured grids
   void testPixelConstructor(Tester t) {
     this.initTestConditions();
 
@@ -445,6 +625,10 @@ class ExamplesSqueezingPictures {
     t.checkExpect(this.botRight.getUp(), this.midRight);
     t.checkExpect(this.botRight.getUp().getLeft(), this.midMid);
     t.checkExpect(this.botRight.getLeft(), this.botMid);
+
+    t.checkExpect(this.twoTwo.getLeft(), this.twoOne);
+    t.checkExpect(this.twoTwo.getUp(), this.oneTwo);
+    t.checkExpect(this.twoTwo.getRight(), this.twoThree);
   }
 
   // we choose to test all getters at once because they all simply return a field's value
@@ -470,7 +654,6 @@ class ExamplesSqueezingPictures {
     t.checkExpect(this.redLine2.getLeft(), this.redLine1);
     t.checkExpect(this.redLine3.getLeft(), this.redLine2);
     t.checkExpect(this.redLine4.getLeft(), this.redLine3);
-
   }
 
   // testing all the setters
@@ -505,8 +688,7 @@ class ExamplesSqueezingPictures {
     t.checkExpect(this.eightBy6.grid.peekLast().size(), 8);
     t.checkExpect(this.twoByThree.grid.peekLast().size(), 3);
     t.checkExpect(this.threeByThree.grid.peekLast().size(), 3);
-
-    // t.checkExpect(this.solidThree.grid, grid);
+    t.checkExpect(this.solidThree.grid, this.gridSolid);
 
   }
 
@@ -535,6 +717,18 @@ class ExamplesSqueezingPictures {
     t.checkExpect(this.redLine3.getEnergy(), 0.33333333333333337);
     t.checkExpect(this.redLine4.getEnergy(), 1.0);
     t.checkExpect(this.greenLineNEU.getEnergy(), 0.0);
+
+  }
+
+  // tests getting the min energy
+  void testMinEnergy(Tester t) {
+    this.initTestConditions();
+
+    // t.checkExpect(this.handMadeThreeByThree.minEnergy(), );
+  }
+
+  // test to get the first row of the seam grid
+  void testFirstRow(Tester t) {
 
   }
 
