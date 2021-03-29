@@ -1,14 +1,19 @@
+import javalib.impworld.*;
+import javalib.worldimages.ComputedPixelImage;
 import javalib.worldimages.FromFileImage;
 import tester.Tester;
 
+// added get color for pixels
+// 2 world methods for squeezing pictures
+// remove prof
+
 import java.awt.*;
-import java.util.ArrayDeque;
-import java.util.ArrayList;
-import java.util.Deque;
-import java.util.Iterator;
+import java.util.*;
 
 // represents a pixel
 interface IPixel {
+  // gets the color of this pixel
+  Color getColor();
 
   // gets the brightness of a pixel
   double getBrightness();
@@ -48,13 +53,41 @@ interface IPixel {
 }
 
 // squeezes pictures, removing blank/unimportant space
-public class SqueezingPictures {
+public class SqueezingPictures extends World {
 
   Deque<Deque<IPixel>> grid;
+  ComputedPixelImage compImg;
+  WorldScene ws;
+
+  public WorldScene makeScene() {
+    return this.ws;
+    // return new WorldScene(1080, 720);
+  }
+
+  @Override
+  public void onTick() {
+    Iterator<Deque<IPixel>> griderator = this.grid.iterator();
+    int rowCount = 0;
+    int colCount = 0;
+    while (griderator.hasNext()) {
+      Iterator<IPixel> rowIter = griderator.next().iterator();
+      colCount = 0;
+      while (rowIter.hasNext()) {
+        IPixel cur = rowIter.next();
+        this.compImg.setPixel(colCount, rowCount, cur.getColor());
+        colCount += 1;
+      }
+      rowCount += 1;
+    }
+    this.ws.placeImageXY(this.compImg, 500, 300);
+    this.removeSeam();
+  }
 
   public SqueezingPictures(String filename) {
     FromFileImage image = new FromFileImage(filename);
     this.grid = new ArrayDeque<Deque<IPixel>>();
+    this.ws = new WorldScene(1080, 720);
+    this.compImg = new ComputedPixelImage((int) image.getWidth(), (int) image.getHeight());
     // fill in the 2d deque grid
     // there is no more efficient way to fill in every pixel of the grid than to
     // go through each pixel individually
@@ -133,7 +166,7 @@ public class SqueezingPictures {
     this.grid = grid;
   }
 
-  // creates a "grid" of seaminfos for each pixel
+  // computes the minimum seam for a grid of IPixels
   SeamInfo minEnergy() {
     Deque<Deque<SeamInfo>> seamGrid = new ArrayDeque<Deque<SeamInfo>>();
     Iterator<Deque<IPixel>> gridIterator = grid.iterator();
@@ -197,6 +230,70 @@ public class SqueezingPictures {
     }
     return rowOfSeamInfo;
   }
+
+  // EFFECT: removes the seam from our grid
+  void removeSeam() {
+    SeamInfo minSeam = this.minEnergy();
+    removeSeamHelp(minSeam, new ReverseIterator<Deque<IPixel>>(this.grid.iterator()));
+  }
+
+  // EFFECT: removes the minimum seam from our grid
+  void removeSeamHelp(SeamInfo minSeam, Iterator<Deque<IPixel>> revRowIterator) {
+    // will be null once we reach the top row of the grid
+    if (minSeam != null) {
+      IPixel curPixel = minSeam.currentPixel;
+      curPixel.getLeft().setRight(curPixel.getRight());
+      curPixel.getRight().setLeft(curPixel.getLeft());
+      curPixel.getDown().setUp(curPixel.getRight());
+      curPixel.getRight().setDown(curPixel.getDown());
+
+      curPixel.getUp().setDown(curPixel.getRight());
+      curPixel.getRight().setUp(curPixel.getUp());
+
+      if ((minSeam.cameFrom != null) && minSeam.diagonalSeam()) {
+        // seaminfo is diagonal
+        // if (right) {
+        // }
+      }
+      // removes this pixel from the grid
+      revRowIterator.next().remove(curPixel);
+
+      this.removeSeamHelp(minSeam.cameFrom, revRowIterator);
+    }
+
+  }
+
+}
+
+// a reversed iterator
+class ReverseIterator<T> implements Iterator<T> {
+
+  Stack<T> stack;
+
+  // EFFECT: adds iterator's values to the stack field
+  public ReverseIterator(Iterator<T> source) {
+    this.stack = new Stack<T>();
+    // add items in source iterator to the stack
+    while (source.hasNext()) {
+      stack.add(source.next());
+    }
+  }
+
+  // checks if this reverse iterator has a next value
+  public boolean hasNext() {
+    return !stack.isEmpty();
+  }
+
+  // gets the next of the reversed iterator
+  public T next() {
+    if (hasNext()) {
+      return stack.pop();
+    }
+    else {
+      throw new UnsupportedOperationException("can't get next");
+    }
+  }
+
 }
 
 // constructs a seam info
@@ -210,6 +307,11 @@ class SeamInfo {
     this.currentPixel = currentPixel;
     this.totalWeight = totalWeight;
     this.cameFrom = cameFrom;
+  }
+
+  // is this seaminfo diagonal
+  boolean diagonalSeam() {
+    return this.cameFrom.currentPixel != this.currentPixel.getUp();
   }
 }
 
@@ -311,6 +413,10 @@ class Pixel implements IPixel {
             && this.getDown().getLeft().equals(this.getLeft().getDown());
   }
 
+  public Color getColor() {
+    return this.color;
+  }
+
   // equals method - because we can't use referential equality
   // getBrightness(), getEnergy(), Color
 
@@ -374,6 +480,10 @@ class UnknownPixel implements IPixel {
   public boolean validPixel() {
     return true;
   }
+
+  public Color getColor() {
+    return Color.BLACK;
+  }
 }
 
 
@@ -387,6 +497,7 @@ class ExamplesSqueezingPictures {
   SqueezingPictures handMadeThreeByThree;
   SqueezingPictures handMadeFourByFour;
   SqueezingPictures onePix;
+  SqueezingPictures prof;
 
   UnknownPixel ukPixel;
   IPixel redLine1;
@@ -462,11 +573,13 @@ class ExamplesSqueezingPictures {
   Deque<Deque<IPixel>> givenGrid;
 
   void initTestConditions() {
+    this.balloons = new SqueezingPictures("balloons.jpg");
     this.eightBy6 = new SqueezingPictures("8x6.jpeg");
     this.twoByThree = new SqueezingPictures("twoByThree.jpeg");
     this.threeByThree = new SqueezingPictures("threeByThree.jpeg");
     this.solidThree = new SqueezingPictures("solid.jpeg");
     this.onePix = new SqueezingPictures("onePix.jpeg");
+    this.prof = new SqueezingPictures("IMG_0160.jpeg");
 
     this.ukPixel = new UnknownPixel();
     this.redLine1 = new Pixel(Color.RED, new UnknownPixel(), new UnknownPixel(),
@@ -882,18 +995,38 @@ class ExamplesSqueezingPictures {
     t.checkExpect(this.onePix.firstRow(oneRow), onePixSeam);
   }
 
-  // tests validPixel
-//  void testValidPixel(Tester t) {
-//    this.initTestConditions();
-//
-//    t.checkExpect(this.redLine1.validPixel(), true);
-//    t.checkExpect(this.redLine2.validPixel(), true);
-//
-//    this.redLine2.setLeft(this.greenLineNEU);
-//
-//    t.checkExpect(this.redLine2.validPixel(), false);
-//
-//
-//  }
+  // tests removimg a seam
+  void testRemoveSeam(Tester t) {
+    this.initTestConditions();
+    t.checkExpect(this.handMadeThreeByThree.grid.peekLast().size(), 3);
+    this.handMadeThreeByThree.removeSeam();
+    t.checkExpect(this.handMadeThreeByThree.grid.peekLast().size(), 2);
 
+    Iterator<Deque<IPixel>> griderator = this.handMadeThreeByThree.grid.iterator();
+    boolean wellFormed = true;
+    while (griderator.hasNext()) {
+      Iterator<IPixel> rowIter = griderator.next().iterator();
+      while (rowIter.hasNext()) {
+        IPixel cur = rowIter.next();
+        if (!(cur.getLeft() instanceof UnknownPixel)) {
+          wellFormed = (cur.getLeft().getRight() == cur);
+        }
+        if (!(cur.getUp() instanceof UnknownPixel)) {
+          wellFormed = (cur.getUp().getDown() == cur);
+        }
+        if (!(cur.getRight() instanceof UnknownPixel)) {
+          wellFormed = (cur.getRight().getLeft() == cur);
+        }
+        if (!(cur.getDown() instanceof UnknownPixel)) {
+          wellFormed = (cur.getDown().getUp() == cur);
+        }
+      }
+    }
+    t.checkExpect(wellFormed, true);
+  }
+
+  void testRun(Tester t) {
+    this.initTestConditions();
+    this.prof.bigBang(1080, 720, 0.2);
+  }
 }

@@ -168,35 +168,35 @@ class Purl implements IStitch {
 }
 
 // a reversed iterator
-class ReverseIterator<T> implements Iterator<T> {
-
-  Stack<T> stack;
-
-  // EFFECT: adds iterator's values to the stack field
-  public ReverseIterator(Iterator<T> source) {
-    this.stack = new Stack<T>();
-
-    while (source.hasNext()) {
-      stack.add(source.next());
-    }
-  }
-
-  // checks if this reverse iterator has a next value
-  public boolean hasNext() {
-    return !stack.isEmpty();
-  }
-
-  // gets the next of the reversed iterator
-  public T next() {
-    if (hasNext()) {
-      return stack.pop();
-    }
-    else {
-      throw new UnsupportedOperationException("can't get next");
-    }
-  }
-
-}
+//class ReverseIterator<T> implements Iterator<T> {
+//
+//  Stack<T> stack;
+//
+//  // EFFECT: adds iterator's values to the stack field
+//  public ReverseIterator(Iterator<T> source) {
+//    this.stack = new Stack<T>();
+//
+//    while (source.hasNext()) {
+//      stack.add(source.next());
+//    }
+//  }
+//
+//  // checks if this reverse iterator has a next value
+//  public boolean hasNext() {
+//    return !stack.isEmpty();
+//  }
+//
+//  // gets the next of the reversed iterator
+//  public T next() {
+//    if (hasNext()) {
+//      return stack.pop();
+//    }
+//    else {
+//      throw new UnsupportedOperationException("can't get next");
+//    }
+//  }
+//
+//}
 
 // An entire fabric's worth of instructions
 class KnitFabricInstructions {
